@@ -16,21 +16,7 @@ func main() {
 	go ws.GlobalHub.Run()
 
 	r := gin.Default()
-
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Hello World from CoScribe!",
-			"version": "1.0.0"
-			,
-		})
-	})
-
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
-
+	
 	r.GET("/ws/echo", ws.EchoHandler)
 	r.GET("/ws/room", ws.RoomHandler)
 
