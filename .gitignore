@@ -94,4 +94,4 @@ docker-compose.dev.yml
 # Go binary
 main
 coscribe
-server
+/server

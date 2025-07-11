@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CoScribe Room Test</h1>
+        
+        <div class="room-info">
+            <div class="input-group">
+                <label>Room ID: </label>
+                <input type="text" id="roomInput" placeholder="Enter room ID..." value="test-room">
+                <label>User Name: </label>
+                <input type="text" id="userInput" placeholder="Enter your name..." value="User1">
+            </div>
+        </div>
+
+        <div id="status" class="status disconnected">
+            Status: Disconnected
+        </div>
+
+        <div class="input-group">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+
+        <div class="message-box" id="messages"></div>
+
+        <div class="input-group">
+            <input type="text" id="messageInput" placeholder="Enter message..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentRoom = '';
+        let currentUser = '';
+        const messages = document.getElementById('messages');
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+
+        function connect() {
+            const roomInput = document.getElementById('roomInput');
+            const userInput = document.getElementById('userInput');
+            
+            currentRoom = roomInput.value.trim() || 'default';
+            currentUser = userInput.value.trim() || 'Anonymous';
+
+            if (ws) {
+                ws.close();
+            }
+
+            const wsUrl = `ws://localhost:8080/ws/room?room=${encodeURIComponent(currentRoom)}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function(event) {
+                addMessage('システム', `Room "${currentRoom}" に接続しました`);
+                updateStatus('Connected', true);
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    const time = new Date(data.time).toLocaleTimeString();
+                    addMessage(data.user || 'Unknown', data.content, time);
+                } catch (e) {
+                    addMessage('システム', 'Invalid message format: ' + event.data);
+                }
+            };
+
+            ws.onclose = function(event) {
+                addMessage('システム', '接続が切断されました');
+                updateStatus('Disconnected', false);
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            };
+
+            ws.onerror = function(error) {
+                addMessage('システム', 'エラーが発生しました: ' + error);
+                updateStatus('Error', false);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                const messageData = {
+                    type: 'message',
+                    content: message,
+                    user: currentUser,
+                    room: currentRoom
+                };
+                
+                ws.send(JSON.stringify(messageData));
+                addMessage(currentUser + ' (自分)', message, new Date().toLocaleTimeString());
+                input.value = '';
+            } else {
+                addMessage('システム', 'メッセージを送信できません: 接続されていません');
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function addMessage(user, content, time) {
+            const div = document.createElement('div');
+            div.className = 'message';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = time ? `[${time}] ` : `[${new Date().toLocaleTimeString()}] `;
+            
+            const userSpan = document.createElement('span');
+            userSpan.className = 'message-user';
+            userSpan.textContent = user + ': ';
+            
+            const contentSpan = document.createElement('span');
+            contentSpan.textContent = content;
+            
+            div.appendChild(timeSpan);
+            div.appendChild(userSpan);
+            div.appendChild(contentSpan);
+            
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function updateStatus(statusText, connected) {
+            status.textContent = 'Status: ' + statusText;
+            status.className = 'status ' + (connected ? 'connected' : 'disconnected');
+        }
+    </script>
+</body>
+</html>
