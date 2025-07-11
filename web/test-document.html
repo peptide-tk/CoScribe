@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <h1>Document Editor</h1>
+
+    <div>
+      <input
+        type="text"
+        id="docInput"
+        placeholder="Document ID"
+        value="test-doc"
+      />
+      <input type="text" id="userInput" placeholder="Your name" value="User1" />
+      <button onclick="connect()">Connect</button>
+    </div>
+
+    <div id="status" class="status disconnected">Status: Disconnected</div>
+
+    <div>
+      <button onclick="insertText()">Insert Text</button>
+      <button onclick="deleteText()">Delete Text</button>
+    </div>
+
+    <textarea
+      id="editor"
+      placeholder="Document content will appear here..."
+    ></textarea>
+
+    <script>
+      let ws = null;
+      let currentDoc = "";
+      let currentUser = "";
+      let currentVersion = 0;
+
+      function connect() {
+        currentDoc = document.getElementById("docInput").value || "default";
+        currentUser = document.getElementById("userInput").value || "Anonymous";
+
+        if (ws) ws.close();
+
+        ws = new WebSocket(`ws://localhost:8080/ws/document?doc=${currentDoc}`);
+
+        ws.onopen = () => {
+          document.getElementById("status").textContent = "Status: Connected";
+          document.getElementById("status").className = "status connected";
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "document_state") {
+            document.getElementById("editor").value = data.content;
+            currentVersion = data.version;
+          } else if (data.type === "edit") {
+            applyEdit(data.edit);
+            currentVersion = data.version;
+          }
+        };
+
+        ws.onclose = () => {
+          document.getElementById("status").textContent =
+            "Status: Disconnected";
+          document.getElementById("status").className = "status disconnected";
+        };
+      }
+
+      function applyEdit(edit) {
+        const lines = document.getElementById("editor").value.split("\n");
+        const line = lines[edit.line_no] || "";
+
+        if (edit.type === "insert") {
+          lines[edit.line_no] =
+            line.slice(0, edit.column) + edit.content + line.slice(edit.column);
+        } else if (edit.type === "delete") {
+          const endPos = Math.min(edit.column + edit.length, line.length);
+          lines[edit.line_no] = line.slice(0, edit.column) + line.slice(endPos);
+        }
+
+        document.getElementById("editor").value = lines.join("\n");
+      }
+
+      function sendEdit(type, content, length) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const message = {
+          type: "edit",
+          edit: {
+            type: type,
+            line_no: 0,
+            column: 0,
+            content: content || "",
+            length: length || 0,
+            version: currentVersion,
+          },
+          user: currentUser,
+        };
+
+        ws.send(JSON.stringify(message));
+      }
+
+      function insertText() {
+        const text = prompt("Insert text:", "Hello World");
+        if (text) sendEdit("insert", text);
+      }
+
+      function deleteText() {
+        const length = parseInt(prompt("Delete length:", "5"));
+        if (length > 0) sendEdit("delete", "", length);
+      }
+    </script>
+  </body>
+</html>
