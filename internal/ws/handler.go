@@ -19,7 +19,7 @@ var upgrader = websocket.Upgrader{
 }
 
 var GlobalHub = NewHub()
-var GlobalDocumentManager = document.NewManager()
+var GlobalDocumentManager *document.Manager
 
 type Message struct {
 	Type    string      `json:"type"`
