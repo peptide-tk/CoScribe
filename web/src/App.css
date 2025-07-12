@@ -1,0 +1,95 @@
+.App {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.app-header {
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.app-header h1 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 2.5rem;
+}
+
+.connection-status {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.connected {
+  color: #4caf50;
+}
+
+.disconnected {
+  color: #f44336;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.document-info {
+  background: #f5f5f5;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.document-info h2 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.document-info p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.document-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.document-editor textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.document-editor textarea:focus {
+  border-color: #2196f3;
+}
+
+.app-footer {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 20px;
+  margin-top: 30px;
+  text-align: center;
+}
+
+.app-footer p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
