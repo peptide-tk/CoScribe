@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./App.css";
 
 interface DocumentState {
@@ -18,6 +18,9 @@ function App() {
     version: 0,
   });
   const [userId] = useState(`user-${Date.now()}`);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const websocket = new WebSocket(
@@ -77,6 +80,9 @@ function App() {
 
     return () => {
       websocket.close();
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -89,40 +95,59 @@ function App() {
     }));
 
     console.log("Text changed to:", newContent);
+
+    scheduleAutoSave();
   };
 
-  const saveDocument = async () => {
-    console.log("Save button clicked!");
-    console.log("Document content:", document.content);
+  const saveDocument = useCallback(
+    async (isAutoSave = false) => {
+      if (isSaving) return;
 
-    try {
-      const response = await fetch(
-        `http://localhost:8080/api/document/${document.id}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            content: document.content,
-          }),
+      setIsSaving(true);
+
+      try {
+        const response = await fetch(
+          `http://localhost:8080/api/document/${document.id}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              content: document.content,
+            }),
+          }
+        );
+
+        const result = await response.json();
+
+        if (response.ok) {
+          setDocument((prev) => ({
+            ...prev,
+            version: result.version,
+          }));
+          setLastSaved(new Date());
+        } else {
+          console.error("Failed to save document:", result);
         }
-      );
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setDocument((prev) => ({
-          ...prev,
-          version: result.version,
-        }));
-      } else {
-        console.error("Failed to save document:", result);
+      } catch (error) {
+        console.error("Save error:", error);
+      } finally {
+        setIsSaving(false);
       }
-    } catch (error) {
-      console.error("Save error:", error);
+    },
+    [document.id, document.content, isSaving]
+  );
+
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
     }
-  };
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      saveDocument(true);
+    }, 2000);
+  }, [saveDocument]);
 
   return (
     <div className="App">
@@ -141,7 +166,20 @@ function App() {
           <h2>{document.title}</h2>
           <p>Version: {document.version}</p>
           <p>Content length: {document.content.length} characters</p>
-          <button onClick={saveDocument}>Save Document (HTTP)</button>
+          <div className="save-status">
+            {isSaving ? (
+              <span style={{ color: "#ff9800" }}>💾 Saving...</span>
+            ) : lastSaved ? (
+              <span style={{ color: "#4caf50" }}>
+                ✅ Saved at {lastSaved.toLocaleTimeString()}
+              </span>
+            ) : (
+              <span style={{ color: "#666" }}>💭 Auto-save enabled</span>
+            )}
+          </div>
+          <button onClick={() => saveDocument(false)} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save Now"}
+          </button>
         </div>
 
         <div className="document-editor">
