@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 
 	"coscribe/internal/ws"
 
@@ -17,8 +16,18 @@ func main() {
 
 	r := gin.Default()
 	
-	r.GET("/ws/echo", ws.EchoHandler)
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "healthy",
+			"service": "CoScribe",
+			"version": "1.0.0",
+		})
+	})
+
+	// WebSocket endpoints
 	r.GET("/ws/room", ws.RoomHandler)
+	r.GET("/ws/document", ws.DocumentHandler)
 
 	fmt.Println("Server starting on :8080")
 	log.Fatal(r.Run(":8080"))

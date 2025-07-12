@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"coscribe/internal/document"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -17,6 +19,7 @@ var upgrader = websocket.Upgrader{
 }
 
 var GlobalHub = NewHub()
+var GlobalDocumentManager = document.NewManager()
 
 type Message struct {
 	Type    string      `json:"type"`
@@ -26,27 +29,16 @@ type Message struct {
 	Time    time.Time   `json:"time"`
 }
 
-func EchoHandler(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
-		return
-	}
-	defer conn.Close()
-
-	for {
-		messageType, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
-			break
-		}
-
-		if err := conn.WriteMessage(messageType, message); err != nil {
-			log.Printf("WebSocket write error: %v", err)
-			break
-		}
-	}
+type DocumentMessage struct {
+	Type     string         `json:"type"`
+	Document string         `json:"document"`
+	Edit     *document.Edit `json:"edit,omitempty"`
+	Content  string         `json:"content,omitempty"`
+	Version  int            `json:"version,omitempty"`
+	User     string         `json:"user"`
+	Time     time.Time      `json:"time"`
 }
+
 
 // RoomHandler
 func RoomHandler(c *gin.Context) {
@@ -61,7 +53,6 @@ func RoomHandler(c *gin.Context) {
 		return
 	}
 
-	// クライアント作成
 	client := &Client{
 		ID:   generateClientID(),
 		Conn: conn,
@@ -69,20 +60,55 @@ func RoomHandler(c *gin.Context) {
 		Send: make(chan []byte, 256),
 	}
 
-	// ハブに登録
 	GlobalHub.Register <- client
 
-	// ゴルーチンを開始
 	go client.writePump()
 	go client.readPump(GlobalHub)
 }
 
-// クライアントIDを生成
+// DocumentHandler
+func DocumentHandler(c *gin.Context) {
+	docID := c.Query("doc")
+	if docID == "" {
+		docID = "default"
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
+
+	client := &Client{
+		ID:   generateClientID(),
+		Conn: conn,
+		Room: &Room{ID: docID},
+		Send: make(chan []byte, 256),
+	}
+
+	GlobalHub.Register <- client
+
+	doc := GlobalDocumentManager.GetDocument(docID)
+	initialMsg := DocumentMessage{
+		Type:     "document_state",
+		Document: docID,
+		Content:  doc.GetContent(),
+		Version:  doc.GetVersion(),
+		Time:     time.Now(),
+	}
+	
+	if msgBytes, err := json.Marshal(initialMsg); err == nil {
+		client.Send <- msgBytes
+	}
+
+	go client.writePump()
+	go client.readDocumentPump(GlobalHub)
+}
+
 func generateClientID() string {
 	return time.Now().Format("20060102-150405-") + time.Now().Format("000")
 }
 
-// クライアントからのメッセージを読み取り
 func (c *Client) readPump(hub *Hub) {
 	defer func() {
 		hub.Unregister <- c
@@ -105,13 +131,11 @@ func (c *Client) readPump(hub *Hub) {
 		msg.Time = time.Now()
 		msg.Room = c.Room.ID
 
-		// ブロードキャスト
 		messageBytes, _ = json.Marshal(msg)
 		hub.BroadcastToRoom(c.Room.ID, messageBytes, c)
 	}
 }
 
-// メッセージを送信
 func (c *Client) writePump() {
 	defer c.Conn.Close()
 
@@ -126,6 +150,69 @@ func (c *Client) writePump() {
 			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("WebSocket write error: %v", err)
 				return
+			}
+		}
+	}
+}
+
+// readDocumentPump
+func (c *Client) readDocumentPump(hub *Hub) {
+	defer func() {
+		hub.Unregister <- c
+		c.Conn.Close()
+	}()
+
+	for {
+		_, messageBytes, err := c.Conn.ReadMessage()
+		if err != nil {
+			log.Printf("WebSocket read error: %v", err)
+			break
+		}
+
+		var msg DocumentMessage
+		if err := json.Unmarshal(messageBytes, &msg); err != nil {
+			log.Printf("Document message unmarshal error: %v", err)
+			continue
+		}
+
+		msg.Time = time.Now()
+		msg.Document = c.Room.ID
+
+		switch msg.Type {
+		case "edit":
+			if msg.Edit != nil {
+				msg.Edit.User = msg.User
+				err := GlobalDocumentManager.ApplyEdit(c.Room.ID, msg.Edit)
+				
+				if err != nil {
+					errorMsg := DocumentMessage{
+						Type:     "error",
+						Document: c.Room.ID,
+						Content:  err.Error(),
+						Time:     time.Now(),
+					}
+					if errBytes, marshalErr := json.Marshal(errorMsg); marshalErr == nil {
+						c.Send <- errBytes
+					}
+					continue
+				}
+
+				msg.Version = GlobalDocumentManager.GetDocument(c.Room.ID).GetVersion()
+				messageBytes, _ = json.Marshal(msg)
+				hub.BroadcastToRoom(c.Room.ID, messageBytes, c)
+			}
+
+		case "request_document":
+			doc := GlobalDocumentManager.GetDocument(c.Room.ID)
+			stateMsg := DocumentMessage{
+				Type:     "document_state",
+				Document: c.Room.ID,
+				Content:  doc.GetContent(),
+				Version:  doc.GetVersion(),
+				Time:     time.Now(),
+			}
+			if stateBytes, err := json.Marshal(stateMsg); err == nil {
+				c.Send <- stateBytes
 			}
 		}
 	}
