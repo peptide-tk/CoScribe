@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"log"
 
+	"coscribe/internal/database"
+	"coscribe/internal/document"
+	"coscribe/internal/store"
 	"coscribe/internal/ws"
 
 	"github.com/gin-gonic/gin"
@@ -12,11 +15,18 @@ import (
 func main() {
 	fmt.Println("Starting CoScribe Server...")
 
+	if err := database.Initialize(); err != nil {
+		log.Fatal("Failed to initialize database:", err)
+	}
+	defer database.Close()
+	documentStore := store.NewDocumentStore()
+	
+	ws.GlobalDocumentManager = document.NewManager(documentStore)
+
 	go ws.GlobalHub.Run()
 
 	r := gin.Default()
 	
-	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "healthy",
@@ -25,7 +35,6 @@ func main() {
 		})
 	})
 
-	// WebSocket endpoints
 	r.GET("/ws/room", ws.RoomHandler)
 	r.GET("/ws/document", ws.DocumentHandler)
 

@@ -5,14 +5,24 @@ import (
 	"time"
 )
 
+type Store interface {
+	GetDocument(id string) (*Document, error)
+	CreateDocument(id, title string) (*Document, error)
+	UpdateDocument(doc *Document) error
+	SaveEdit(docID string, edit *Edit) error
+	ListDocuments() ([]*DocumentInfo, error)
+}
+
 type Manager struct {
 	documents map[string]*Document
+	store     Store
 	mu        sync.RWMutex
 }
 
-func NewManager() *Manager {
+func NewManager(store Store) *Manager {
 	return &Manager{
 		documents: make(map[string]*Document),
+		store:     store,
 	}
 }
 
@@ -22,6 +32,14 @@ func (m *Manager) GetDocument(id string) *Document {
 
 	if doc, exists := m.documents[id]; exists {
 		return doc
+	}
+
+	if m.store != nil {
+		doc, err := m.store.GetDocument(id)
+		if err == nil {
+			m.documents[id] = doc
+			return doc
+		}
 	}
 
 	doc := NewDocument(id, "Untitled Document")
@@ -65,7 +83,24 @@ func (m *Manager) ListDocuments() []*DocumentInfo {
 func (m *Manager) ApplyEdit(docID string, edit *Edit) error {
 	doc := m.GetDocument(docID)
 	edit.Time = time.Now()
-	return doc.ApplyEdit(edit)
+	
+	err := doc.ApplyEdit(edit)
+	if err != nil {
+		return err
+	}
+	
+	if m.store != nil {
+		if err := m.store.SaveEdit(docID, edit); err != nil {
+			// TODO: ログ機能を実装後に適切にログ出力
+		}
+		
+		// 文書を更新
+		if err := m.store.UpdateDocument(doc); err != nil {
+			// TODO: ログ機能を実装後に適切にログ出力
+		}
+	}
+	
+	return nil
 }
 
 type DocumentInfo struct {

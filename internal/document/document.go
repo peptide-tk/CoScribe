@@ -1,6 +1,7 @@
 package document
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -144,13 +145,20 @@ func (d *Document) updateContent() {
 	d.Content = strings.Join(d.Lines, "\n")
 }
 
+func ContentToLines(content string) []string {
+	if content == "" {
+		return []string{""}
+	}
+	return strings.Split(content, "\n")
+}
+
 type VersionConflictError struct {
 	Expected int
 	Actual   int
 }
 
 func (e *VersionConflictError) Error() string {
-	return "version conflict: expected " + string(rune(e.Expected)) + ", got " + string(rune(e.Actual))
+	return fmt.Sprintf("version conflict: expected %d, got %d", e.Expected, e.Actual)
 }
 
 type InvalidLineError struct {
@@ -159,7 +167,7 @@ type InvalidLineError struct {
 }
 
 func (e *InvalidLineError) Error() string {
-	return "invalid line number: " + string(rune(e.LineNo)) + " (max: " + string(rune(e.MaxLines-1)) + ")"
+	return fmt.Sprintf("invalid line number: %d (max: %d)", e.LineNo, e.MaxLines-1)
 }
 
 type InvalidEditTypeError struct {
