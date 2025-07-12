@@ -16,6 +16,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
+	EnableCompression: false,
 }
 
 var GlobalHub = NewHub()
@@ -213,6 +214,32 @@ func (c *Client) readDocumentPump(hub *Hub) {
 			}
 			if stateBytes, err := json.Marshal(stateMsg); err == nil {
 				c.Send <- stateBytes
+			}
+
+		case "document_update":
+			if msg.Content != "" {
+				doc := GlobalDocumentManager.GetDocument(c.Room.ID)
+				doc.SetContent(msg.Content)
+				
+				if err := GlobalDocumentManager.SaveDocument(c.Room.ID); err != nil {
+					log.Printf("Failed to save document: %v", err)
+				} else {
+					log.Printf("Document saved successfully")
+				}
+				
+				successMsg := DocumentMessage{
+					Type:     "document_updated",
+					Document: c.Room.ID,
+					Content:  doc.GetContent(),
+					Version:  doc.GetVersion(),
+					Time:     time.Now(),
+				}
+				if successBytes, err := json.Marshal(successMsg); err == nil {
+					c.Send <- successBytes
+					log.Printf("Sent document_updated response")
+				}
+			} else {
+				log.Printf("Empty content in document_update message")
 			}
 		}
 	}

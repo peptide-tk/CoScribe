@@ -9,7 +9,7 @@ interface DocumentState {
 }
 
 function App() {
-  const [, setWs] = useState<WebSocket | null>(null);
+  const [ws, setWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [document, setDocument] = useState<DocumentState>({
     id: "sample-doc",
@@ -17,6 +17,7 @@ function App() {
     content: "",
     version: 0,
   });
+  const [userId] = useState(`user-${Date.now()}`);
 
   useEffect(() => {
     const websocket = new WebSocket(
@@ -40,6 +41,27 @@ function App() {
           content: data.content,
           version: data.version,
         });
+      } else if (data.type === "edit") {
+        setDocument((prev) => ({
+          ...prev,
+          version: data.version,
+        }));
+      } else if (data.type === "document_updated") {
+        setDocument((prev) => ({
+          ...prev,
+          version: data.version,
+        }));
+      } else if (data.type === "error") {
+        console.error("Server error:", data.content);
+        if (ws && connected) {
+          ws.send(
+            JSON.stringify({
+              type: "request_document",
+              document: document.id,
+              user: userId,
+            })
+          );
+        }
       }
     };
 
@@ -58,6 +80,50 @@ function App() {
     };
   }, []);
 
+  const handleTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = event.target.value;
+
+    setDocument((prev) => ({
+      ...prev,
+      content: newContent,
+    }));
+
+    console.log("Text changed to:", newContent);
+  };
+
+  const saveDocument = async () => {
+    console.log("Save button clicked!");
+    console.log("Document content:", document.content);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/document/${document.id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content: document.content,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setDocument((prev) => ({
+          ...prev,
+          version: result.version,
+        }));
+      } else {
+        console.error("Failed to save document:", result);
+      }
+    } catch (error) {
+      console.error("Save error:", error);
+    }
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -74,13 +140,15 @@ function App() {
         <div className="document-info">
           <h2>{document.title}</h2>
           <p>Version: {document.version}</p>
+          <p>Content length: {document.content.length} characters</p>
+          <button onClick={saveDocument}>Save Document (HTTP)</button>
         </div>
 
         <div className="document-editor">
           <textarea
             value={document.content}
-            readOnly
-            placeholder="仮内容"
+            onChange={handleTextChange}
+            placeholder="Start writing..."
             rows={20}
             cols={80}
           />
