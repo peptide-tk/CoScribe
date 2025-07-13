@@ -53,8 +53,7 @@ CoScribe/
 ## 起動
 
 ```bash
-make dev-up
-またはdocker-compose up --build
+make dev-full
 
 ```
 
