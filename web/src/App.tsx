@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import "./App.css";
+import { useWebSocket } from "./hooks/useWebSocket";
 
 interface DocumentState {
   id: string;
@@ -9,8 +10,6 @@ interface DocumentState {
 }
 
 function App() {
-  const [ws, setWs] = useState<WebSocket | null>(null);
-  const [connected, setConnected] = useState(false);
   const [document, setDocument] = useState<DocumentState>({
     id: "sample-doc",
     title: "Loading...",
@@ -22,85 +21,19 @@ function App() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const { connected, sendRealtimeUpdate } = useWebSocket({
+    documentId: document.id,
+    userId,
+    onDocumentUpdate: (updatedDoc) => {
+      setDocument(updatedDoc);
+    },
+    onError: (error) => {
+      console.error("WebSocket error:", error);
+    },
+  });
+
   useEffect(() => {
-    let reconnectTimer: NodeJS.Timeout;
-
-    const connectWebSocket = () => {
-      const websocket = new WebSocket(
-        "ws://localhost:8080/ws/document?doc=sample-doc"
-      );
-
-      websocket.onopen = () => {
-        setConnected(true);
-        setWs(websocket);
-      };
-
-      websocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "document_state") {
-          setDocument({
-            id: data.document,
-            title: "Sample Document",
-            content: data.content,
-            version: data.version,
-          });
-        } else if (data.type === "edit") {
-          setDocument((prev) => ({
-            ...prev,
-            version: data.version,
-          }));
-        } else if (data.type === "document_updated") {
-          if (data.content !== undefined && data.user !== userId) {
-            setDocument((prev) => ({
-              ...prev,
-              content: data.content,
-              version: data.version,
-            }));
-          } else {
-            setDocument((prev) => ({
-              ...prev,
-              version: data.version,
-            }));
-          }
-        } else if (data.type === "error") {
-          console.error("Server error:", data.content);
-          if (ws && connected) {
-            ws.send(
-              JSON.stringify({
-                type: "request_document",
-                document: document.id,
-                user: userId,
-              })
-            );
-          }
-        }
-      };
-
-      websocket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
-
-      websocket.onclose = () => {
-        console.log("🔌 WebSocket disconnected");
-        setConnected(false);
-        setWs(null);
-
-        reconnectTimer = setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
-      };
-
-      return websocket;
-    };
-
-    const websocket = connectWebSocket();
-
     return () => {
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
-      websocket.close();
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
@@ -169,30 +102,6 @@ function App() {
     }, 2000);
   }, [saveDocument]);
 
-  const sendRealtimeUpdate = useCallback(
-    (content: string) => {
-      if (ws && connected) {
-        const message = {
-          type: "document_update",
-          document: document.id,
-          content: content,
-          user: userId,
-          time: new Date().toISOString(),
-        };
-        try {
-          ws.send(JSON.stringify(message));
-        } catch (error) {
-          console.error("Failed to send message:", error);
-        }
-      } else {
-        console.log("Cannot send: WebSocket not connected", {
-          ws: !!ws,
-          connected,
-        });
-      }
-    },
-    [ws, connected, document.id, userId]
-  );
 
   return (
     <div className="App">
