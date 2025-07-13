@@ -55,6 +55,14 @@ func (d *Document) GetVersion() int {
 	return d.Version
 }
 
+func (d *Document) SetContent(content string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.Content = content
+	d.Lines = ContentToLines(content)
+	d.Version++
+}
+
 func (d *Document) ApplyEdit(edit *Edit) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

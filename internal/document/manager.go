@@ -103,6 +103,14 @@ func (m *Manager) ApplyEdit(docID string, edit *Edit) error {
 	return nil
 }
 
+func (m *Manager) SaveDocument(docID string) error {
+	doc := m.GetDocument(docID)
+	if m.store != nil {
+		return m.store.UpdateDocument(doc)
+	}
+	return nil
+}
+
 type DocumentInfo struct {
 	ID      string `json:"id"`
 	Title   string `json:"title"`

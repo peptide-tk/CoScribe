@@ -53,7 +53,7 @@ func (h *Hub) registerClient(client *Client) {
 
 	if _, ok := h.Rooms[client.Room.ID]; !ok {
 		h.Rooms[client.Room.ID] = &Room{
-			ID:      client.Room.ID,
+			ID: client.Room.ID,
 			Clients: make(map[*Client]bool),
 		}
 	}
@@ -62,8 +62,6 @@ func (h *Hub) registerClient(client *Client) {
 	room.mu.Lock()
 	room.Clients[client] = true
 	room.mu.Unlock()
-
-	log.Printf("Client %s joined room %s", client.ID, client.Room.ID)
 }
 
 func (h *Hub) unregisterClient(client *Client) {
@@ -75,13 +73,11 @@ func (h *Hub) unregisterClient(client *Client) {
 		if _, ok := room.Clients[client]; ok {
 			delete(room.Clients, client)
 			close(client.Send)
-			log.Printf("Client %s left room %s", client.ID, client.Room.ID)
 		}
 		room.mu.Unlock()
 
 		if len(room.Clients) == 0 {
 			delete(h.Rooms, client.Room.ID)
-			log.Printf("Room %s deleted", client.Room.ID)
 		}
 	}
 }
@@ -92,17 +88,23 @@ func (h *Hub) BroadcastToRoom(roomID string, message []byte, sender *Client) {
 
 	if room, ok := h.Rooms[roomID]; ok {
 		room.mu.RLock()
+		
+		sentCount := 0
 		for client := range room.Clients {
 			if client != sender {
 				select {
 				case client.Send <- message:
+					sentCount++
 				default:
+					log.Printf("Failed to send to client %s, removing", client.ID)
 					close(client.Send)
 					delete(room.Clients, client)
 				}
 			}
 		}
 		room.mu.RUnlock()
+	} else {
+		log.Printf("Room %s not found for broadcast", roomID)
 	}
 }
 
