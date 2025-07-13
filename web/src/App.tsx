@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import "./App.css";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { DocumentState, SaveDocumentResponse } from "./types";
+import { Layout, DocumentInfo, DocumentEditor, ConnectionStatus } from "./components";
 
 function App() {
   const [document, setDocument] = useState<DocumentState>({
@@ -96,55 +97,17 @@ function App() {
     }, 2000);
   }, [saveDocument]);
 
-
   return (
-    <div className="App">
-      <header className="app-header">
-        <h1>CoScribe - Collaborative Writing Tool</h1>
-        <div className="connection-status">
-          WebSocket:{" "}
-          <span className={connected ? "connected" : "disconnected"}>
-            {connected ? "🔗 Connected (Real-time)" : "🔌 Disconnected"}
-          </span>
-        </div>
-      </header>
-
-      <main className="app-main">
-        <div className="document-info">
-          <h2>{document.title}</h2>
-          <p>Version: {document.version}</p>
-          <p>Content length: {document.content.length} characters</p>
-          <div className="save-status">
-            {isSaving ? (
-              <span style={{ color: "#ff9800" }}>💾 Saving...</span>
-            ) : lastSaved ? (
-              <span style={{ color: "#4caf50" }}>
-                ✅ Saved at {lastSaved.toLocaleTimeString()}
-              </span>
-            ) : (
-              <span style={{ color: "#666" }}>💭 Auto-save enabled</span>
-            )}
-          </div>
-          <button onClick={() => saveDocument(false)} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Now"}
-          </button>
-        </div>
-
-        <div className="document-editor">
-          <textarea
-            value={document.content}
-            onChange={handleTextChange}
-            placeholder="Start writing..."
-            rows={20}
-            cols={80}
-          />
-        </div>
-      </main>
-
-      <footer className="app-footer">
-        <p>CoScribe v1.0.0 - Real-time collaborative writing</p>
-      </footer>
-    </div>
+    <Layout>
+      <ConnectionStatus connected={connected} />
+      <DocumentInfo
+        document={document}
+        isSaving={isSaving}
+        lastSaved={lastSaved}
+        onSave={() => saveDocument(false)}
+      />
+      <DocumentEditor content={document.content} onChange={handleTextChange} />
+    </Layout>
   );
 }
 
