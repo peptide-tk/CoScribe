@@ -88,7 +88,6 @@ func (h *Hub) BroadcastToRoom(roomID string, message []byte, sender *Client) {
 
 	if room, ok := h.Rooms[roomID]; ok {
 		room.mu.RLock()
-		clientCount := len(room.Clients)
 		
 		sentCount := 0
 		for client := range room.Clients {
