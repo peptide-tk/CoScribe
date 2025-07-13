@@ -1,25 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-
-interface DocumentState {
-  id: string;
-  title: string;
-  content: string;
-  version: number;
-}
-
-interface UseWebSocketOptions {
-  documentId: string;
-  userId: string;
-  onDocumentUpdate?: (document: DocumentState) => void;
-  onError?: (error: string) => void;
-}
-
-interface UseWebSocketReturn {
-  ws: WebSocket | null;
-  connected: boolean;
-  sendRealtimeUpdate: (content: string) => void;
-  reconnect: () => void;
-}
+import { DocumentState, UseWebSocketOptions, UseWebSocketReturn } from "../types";
 
 export const useWebSocket = ({
   documentId,

@@ -1,13 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import "./App.css";
 import { useWebSocket } from "./hooks/useWebSocket";
-
-interface DocumentState {
-  id: string;
-  title: string;
-  content: string;
-  version: number;
-}
+import { DocumentState, SaveDocumentResponse } from "./types";
 
 function App() {
   const [document, setDocument] = useState<DocumentState>({
@@ -72,7 +66,7 @@ function App() {
           }
         );
 
-        const result = await response.json();
+        const result: SaveDocumentResponse = await response.json();
 
         if (response.ok) {
           setDocument((prev) => ({
