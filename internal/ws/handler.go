@@ -223,20 +223,18 @@ func (c *Client) readDocumentPump(hub *Hub) {
 				
 				if err := GlobalDocumentManager.SaveDocument(c.Room.ID); err != nil {
 					log.Printf("Failed to save document: %v", err)
-				} else {
-					log.Printf("Document saved successfully")
 				}
 				
-				successMsg := DocumentMessage{
+				broadcastMsg := DocumentMessage{
 					Type:     "document_updated",
 					Document: c.Room.ID,
 					Content:  doc.GetContent(),
 					Version:  doc.GetVersion(),
+					User:     msg.User,
 					Time:     time.Now(),
 				}
-				if successBytes, err := json.Marshal(successMsg); err == nil {
-					c.Send <- successBytes
-					log.Printf("Sent document_updated response")
+				if broadcastBytes, err := json.Marshal(broadcastMsg); err == nil {
+					hub.BroadcastToRoom(c.Room.ID, broadcastBytes, nil)
 				}
 			} else {
 				log.Printf("Empty content in document_update message")

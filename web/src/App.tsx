@@ -23,62 +23,83 @@ function App() {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const websocket = new WebSocket(
-      "ws://localhost:8080/ws/document?doc=sample-doc"
-    );
+    let reconnectTimer: NodeJS.Timeout;
 
-    websocket.onopen = () => {
-      console.log("WebSocket connected");
-      setConnected(true);
-      setWs(websocket);
-    };
+    const connectWebSocket = () => {
+      const websocket = new WebSocket(
+        "ws://localhost:8080/ws/document?doc=sample-doc"
+      );
 
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("Received:", data);
+      websocket.onopen = () => {
+        setConnected(true);
+        setWs(websocket);
+      };
 
-      if (data.type === "document_state") {
-        setDocument({
-          id: data.document,
-          title: "Sample Document",
-          content: data.content,
-          version: data.version,
-        });
-      } else if (data.type === "edit") {
-        setDocument((prev) => ({
-          ...prev,
-          version: data.version,
-        }));
-      } else if (data.type === "document_updated") {
-        setDocument((prev) => ({
-          ...prev,
-          version: data.version,
-        }));
-      } else if (data.type === "error") {
-        console.error("Server error:", data.content);
-        if (ws && connected) {
-          ws.send(
-            JSON.stringify({
-              type: "request_document",
-              document: document.id,
-              user: userId,
-            })
-          );
+      websocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "document_state") {
+          setDocument({
+            id: data.document,
+            title: "Sample Document",
+            content: data.content,
+            version: data.version,
+          });
+        } else if (data.type === "edit") {
+          setDocument((prev) => ({
+            ...prev,
+            version: data.version,
+          }));
+        } else if (data.type === "document_updated") {
+          if (data.content !== undefined && data.user !== userId) {
+            setDocument((prev) => ({
+              ...prev,
+              content: data.content,
+              version: data.version,
+            }));
+          } else {
+            setDocument((prev) => ({
+              ...prev,
+              version: data.version,
+            }));
+          }
+        } else if (data.type === "error") {
+          console.error("Server error:", data.content);
+          if (ws && connected) {
+            ws.send(
+              JSON.stringify({
+                type: "request_document",
+                document: document.id,
+                user: userId,
+              })
+            );
+          }
         }
-      }
+      };
+
+      websocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      websocket.onclose = () => {
+        console.log("🔌 WebSocket disconnected");
+        setConnected(false);
+        setWs(null);
+
+        reconnectTimer = setTimeout(() => {
+          connectWebSocket();
+        }, 3000);
+      };
+
+      return websocket;
     };
 
-    websocket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
-
-    websocket.onclose = () => {
-      console.log("WebSocket disconnected");
-      setConnected(false);
-      setWs(null);
-    };
+    const websocket = connectWebSocket();
 
     return () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
       websocket.close();
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
@@ -94,8 +115,7 @@ function App() {
       content: newContent,
     }));
 
-    console.log("Text changed to:", newContent);
-
+    sendRealtimeUpdate(newContent);
     scheduleAutoSave();
   };
 
@@ -149,14 +169,39 @@ function App() {
     }, 2000);
   }, [saveDocument]);
 
+  const sendRealtimeUpdate = useCallback(
+    (content: string) => {
+      if (ws && connected) {
+        const message = {
+          type: "document_update",
+          document: document.id,
+          content: content,
+          user: userId,
+          time: new Date().toISOString(),
+        };
+        try {
+          ws.send(JSON.stringify(message));
+        } catch (error) {
+          console.error("Failed to send message:", error);
+        }
+      } else {
+        console.log("Cannot send: WebSocket not connected", {
+          ws: !!ws,
+          connected,
+        });
+      }
+    },
+    [ws, connected, document.id, userId]
+  );
+
   return (
     <div className="App">
       <header className="app-header">
         <h1>CoScribe - Collaborative Writing Tool</h1>
         <div className="connection-status">
-          Status:{" "}
+          WebSocket:{" "}
           <span className={connected ? "connected" : "disconnected"}>
-            {connected ? "Connected" : "Disconnected"}
+            {connected ? "🔗 Connected (Real-time)" : "🔌 Disconnected"}
           </span>
         </div>
       </header>
