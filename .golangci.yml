@@ -1,0 +1,29 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - goconst
+    - gocyclo
+    - gosec
+    - stylecheck
+    - unconvert
+    - unparam
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+    - path: cmd/
+      linters:
+        - gosec
+  max-issues-per-linter: 0
+  max-same-issues: 0
