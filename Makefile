@@ -65,3 +65,15 @@ quick-start: clean dev-up
 health-check:
 	@curl -f http://localhost:8080/health 2>/dev/null && echo "✅ Backend is healthy" || echo "❌ Backend is unhealthy"
 	@curl -f http://localhost:3000 2>/dev/null && echo "✅ Frontend is accessible" || echo "❌ Frontend is not accessible"
+
+dev-web:
+	@cd web && npm start
+
+dev-full:
+	@docker compose up --build -d
+	@sleep 5
+	@cd web && BROWSER=none npm start
+
+dev-full-stop:
+	@docker compose down
+	@pkill -f "react-scripts start" || true
